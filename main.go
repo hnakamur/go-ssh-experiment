@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"net"
+	"os"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 func main() {
@@ -16,14 +18,14 @@ func main() {
 }
 
 func run() error {
-	keyPair, err := keyPair("/home/hnakamur/.ssh/container_to_lxdhost.id_ed25519")
+	auth, err := sshAgent()
 	if err != nil {
 		return err
 	}
 
 	config := &ssh.ClientConfig{
 		User: "root",
-		Auth: []ssh.AuthMethod{keyPair},
+		Auth: []ssh.AuthMethod{auth},
 	}
 
 	client, err := ssh.Dial("tcp", "10.155.92.21:22", config)
@@ -49,14 +51,10 @@ func run() error {
 	return nil
 }
 
-func keyPair(keyFile string) (ssh.AuthMethod, error) {
-	pem, err := ioutil.ReadFile(keyFile)
+func sshAgent() (ssh.AuthMethod, error) {
+	agentSock, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
 	if err != nil {
 		return nil, err
 	}
-	signer, err := ssh.ParsePrivateKey(pem)
-	if err != nil {
-		return nil, err
-	}
-	return ssh.PublicKeys(signer), nil
+	return ssh.PublicKeysCallback(agent.NewClient(agentSock).Signers), nil
 }
